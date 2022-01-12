@@ -1,7 +1,9 @@
 package com.bignerdranch.android.criminalintent
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.DateFormat
@@ -12,6 +14,9 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat.startActivityForResult
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentResultListener
 import androidx.fragment.app.setFragmentResultListener
@@ -22,6 +27,7 @@ import androidx.lifecycle.Observer
 private const val ARG_CRIME_ID = "crime_id"
 private const val DIALOG_DATE = "DialogDate"
 private const val REQUEST_DATE = "0" // 申请拿到一个结果
+private const val REQUEST_CONTACT = "1" // 申请拿到联系人
 private const val ARG_DATE = "date"
 private const val DATE_FORMAT = "EEE, MM, dd"
 
@@ -32,7 +38,7 @@ class CrimeFragment : Fragment() {
     private lateinit var solvedCheckBox: CheckBox
     private lateinit var actualResult: Date
     private lateinit var reportButton: Button
-
+    private lateinit var suspectButton: Button
     /**
      * 用库实现快速获取viewModel
      */
@@ -68,6 +74,7 @@ class CrimeFragment : Fragment() {
         dateButton = view.findViewById(R.id.crime_date) as Button
         solvedCheckBox = view.findViewById(R.id.crime_solved) as CheckBox
         reportButton = view.findViewById(R.id.crime_report) as Button
+        suspectButton = view.findViewById(R.id.crime_suspect) as Button
 
         return view
     }
@@ -131,7 +138,16 @@ class CrimeFragment : Fragment() {
                 putExtra(Intent.EXTRA_TEXT, getCrimeReport())
                 putExtra(Intent.EXTRA_SUBJECT, getString(R.string.crime_report_subject))
             }.also { intent ->
-                startActivity(intent)
+                // 使用选择器显式响应,接收参数为初始intent以及选择器显示的提示文字
+                val chooseIntent = Intent.createChooser(intent,getString(R.string.send_report))
+                startActivity(chooseIntent)
+            }
+        }
+
+        suspectButton.apply{
+            val pickContactIntent = Intent(Intent.ACTION_PICK,ContactsContract.Contacts.CONTENT_URI)
+            setOnClickListener {
+                getResult.launch(pickContactIntent)
             }
         }
     }
@@ -176,6 +192,12 @@ class CrimeFragment : Fragment() {
         }
 
         return getString(R.string.crime_report, crime.title, dateString, solvedString, suspect)
+    }
+
+    private val getResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()){
+        if(it.resultCode == Activity.RESULT_OK){
+            val value = it.data?.getStringExtra("input")
+        }
     }
 
     companion object {
