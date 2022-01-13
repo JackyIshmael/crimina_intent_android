@@ -2,6 +2,7 @@ package com.bignerdranch.android.criminalintent
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.text.Editable
@@ -39,6 +40,7 @@ class CrimeFragment : Fragment() {
     private lateinit var actualResult: Date
     private lateinit var reportButton: Button
     private lateinit var suspectButton: Button
+
     /**
      * 用库实现快速获取viewModel
      */
@@ -139,13 +141,14 @@ class CrimeFragment : Fragment() {
                 putExtra(Intent.EXTRA_SUBJECT, getString(R.string.crime_report_subject))
             }.also { intent ->
                 // 使用选择器显式响应,接收参数为初始intent以及选择器显示的提示文字
-                val chooseIntent = Intent.createChooser(intent,getString(R.string.send_report))
+                val chooseIntent = Intent.createChooser(intent, getString(R.string.send_report))
                 startActivity(chooseIntent)
             }
         }
 
-        suspectButton.apply{
-            val pickContactIntent = Intent(Intent.ACTION_PICK,ContactsContract.Contacts.CONTENT_URI)
+        suspectButton.apply {
+            val pickContactIntent =
+                Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
             setOnClickListener {
                 getResult.launch(pickContactIntent)
             }
@@ -171,6 +174,11 @@ class CrimeFragment : Fragment() {
             isChecked = crime.isSolved
             jumpDrawablesToCurrentState() // 跳过check动画
         }
+        if (!crime.suspect.isBlank()) {
+            suspectButton.apply {
+                text = crime.suspect
+            }
+        }
 
     }
 
@@ -194,11 +202,32 @@ class CrimeFragment : Fragment() {
         return getString(R.string.crime_report, crime.title, dateString, solvedString, suspect)
     }
 
-    private val getResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()){
-        if(it.resultCode == Activity.RESULT_OK){
-            val value = it.data?.getStringExtra("input")
+    private val getResult =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (it.resultCode == Activity.RESULT_OK && it.data != null) {
+                val contactUri: Uri? = it.data!!.data
+                val queryFields = arrayOf(ContactsContract.Contacts.DISPLAY_NAME)
+//            val value = it.data?.getStringExtra("input")
+                val cursor = contactUri?.let { it1 ->
+                    requireActivity().contentResolver.query(
+                        it1,
+                        queryFields,
+                        null,
+                        null,
+                        null
+                    )
+                }
+                cursor.use {
+                    if (it?.count!! > 0) {
+                        it.moveToFirst()
+                        val suspect = it.getString(0)
+                        crime.suspect = suspect
+                        crimeDetailViewModel.saveCrime(crime)
+                        suspectButton.text = suspect
+                    }
+                }
+            }
         }
-    }
 
     companion object {
         fun newInstance(crimeId: UUID): CrimeFragment {
