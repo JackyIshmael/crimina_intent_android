@@ -2,6 +2,8 @@ package com.bignerdranch.android.criminalintent
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
@@ -147,11 +149,29 @@ class CrimeFragment : Fragment() {
         }
 
         suspectButton.apply {
+            /***
+             * 使用隐式intent唤起，从联系人应用中选择嫌疑人
+             * 参数1：Intent范式，表示获取数据
+             * 参数2：表示联系人app的跳链URI？
+             * 所以这2个参数一加，和隐式唤起有什么关系了呢
+             */
             val pickContactIntent =
                 Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
             setOnClickListener {
-                getResult.launch(pickContactIntent)
+                getResult.launch(pickContactIntent) // 设置点击监听器
             }
+
+            // 以下代码可用于验证过滤器效果
+//            pickContactIntent.addCategory(Intent.CATEGORY_HOME)
+
+            // 调用操作系统的PackageManager，结合intent检查设备是否存在可用app，没有则将按钮置灰
+            // ResoveInfo Flags可能的值：https://developer.android.com/reference/android/content/pm/PackageManager.ResolveInfoFlags
+            val packageManager: PackageManager = requireActivity().packageManager;
+            val resolvedActivity: ResolveInfo? = packageManager.resolveActivity(pickContactIntent,PackageManager.MATCH_DEFAULT_ONLY);
+            if(resolvedActivity == null){
+                isEnabled = false
+            }
+
         }
     }
 
@@ -170,10 +190,16 @@ class CrimeFragment : Fragment() {
         dateButton.apply {
             text = DateFormat.format("EEE, MMM d, yyyy", crime.date)
         }
+        // show一下kotlin的对象批量赋值操作，使用apply才能使Text被实际赋值
         solvedCheckBox.apply {
             isChecked = crime.isSolved
             jumpDrawablesToCurrentState() // 跳过check动画
         }
+//        错误示例：
+//        if(crime.suspect.isEmpty()){
+//            suspectButton.text = crime.suspect;
+//        }
+//        使用apply才能实际赋值
         if (!crime.suspect.isBlank()) {
             suspectButton.apply {
                 text = crime.suspect
@@ -206,8 +232,9 @@ class CrimeFragment : Fragment() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             if (it.resultCode == Activity.RESULT_OK && it.data != null) {
                 val contactUri: Uri? = it.data!!.data
+                // 表示查询语句的数据源
                 val queryFields = arrayOf(ContactsContract.Contacts.DISPLAY_NAME)
-//            val value = it.data?.getStringExtra("input")
+                // 执行查询语句，获取的数据存储在cursor
                 val cursor = contactUri?.let { it1 ->
                     requireActivity().contentResolver.query(
                         it1,
@@ -217,9 +244,10 @@ class CrimeFragment : Fragment() {
                         null
                     )
                 }
+                // kotlin的api，对cursor变量做一些数据处理
                 cursor.use {
                     if (it?.count!! > 0) {
-                        it.moveToFirst()
+                        it.moveToFirst() // 取出数据中的第一行（因为cursor本身也就只包含一条记录
                         val suspect = it.getString(0)
                         crime.suspect = suspect
                         crimeDetailViewModel.saveCrime(crime)
